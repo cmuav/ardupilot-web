@@ -857,8 +857,9 @@ void UARTDriver::handle_writing_from_writebuffer_to_device()
 {
     WITH_SEMAPHORE(write_mtx);
 #ifdef __EMSCRIPTEN__
-    // WebAssembly: drain writebuffer into the shared ring buffer for JS to read
-    {
+    // WASM: ports with a sim serial device (GPS, etc.) fall through to the
+    // normal _sim_serial_device path below. All other ports use the ring buffer.
+    if (_sim_serial_device == nullptr) {
         uint32_t navail;
         const uint8_t *readptr = _writebuffer.readptr(navail);
         if (readptr && navail > 0) {
@@ -866,8 +867,8 @@ void UARTDriver::handle_writing_from_writebuffer_to_device()
             _writebuffer.advance(navail);
             _tx_stats_bytes += navail;
         }
+        return;
     }
-    return;
 #endif
     if (!_connected) {
         _check_reconnect();
@@ -932,8 +933,9 @@ void UARTDriver::handle_writing_from_writebuffer_to_device()
 void UARTDriver::handle_reading_from_device_to_readbuffer()
 {
 #ifdef __EMSCRIPTEN__
-    // WebAssembly: read from the shared ring buffer that JS writes into
-    {
+    // WASM: ports with a sim serial device (GPS, etc.) fall through to the
+    // normal _sim_serial_device path below. All other ports use the ring buffer.
+    if (_sim_serial_device == nullptr) {
         uint32_t space = _readbuffer.space();
         if (space > 0) {
             uint8_t tmpbuf[space];
@@ -944,8 +946,8 @@ void UARTDriver::handle_reading_from_device_to_readbuffer()
                 _rx_stats_bytes += nread;
             }
         }
+        return;
     }
-    return;
 #endif
     if (!_connected) {
         _check_reconnect();

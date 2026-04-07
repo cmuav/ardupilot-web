@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 // Ring buffer size - Browser reads MAVLINK from here
-#define WASM_MAVLINK_BUF_SIZE 16384
+#define WASM_MAVLINK_BUF_SIZE 65536
 
 #ifdef __cplusplus
 extern "C" {
