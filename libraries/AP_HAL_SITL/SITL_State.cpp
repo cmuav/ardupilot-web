@@ -87,10 +87,12 @@ void SITL_State::_fdm_input_step(void)
 {
     _fdm_input_local();
 
+#ifndef __EMSCRIPTEN__
     /* make sure we die if our parent dies */
     if (kill(_parent_pid, 0) != 0) {
         exit(1);
     }
+#endif
 
     if (_scheduler->interrupts_are_blocked() || _sitl == nullptr) {
         return;
@@ -422,6 +424,13 @@ void SITL_State::set_height_agl(void)
  */
 void SITL_State::multicast_state_open(void)
 {
+#ifdef __EMSCRIPTEN__
+    // Multicast and servo sockets are not supported in WASM/Emscripten
+    mc_out_fd = -1;
+    servo_in_fd = -1;
+    ::printf("multicast disabled (WASM build)\n");
+    return;
+#else
     struct sockaddr_in sockaddr {};
     int ret;
 
@@ -478,6 +487,7 @@ void SITL_State::multicast_state_open(void)
         exit(1);
     }
     ::printf("multicast initialised\n");
+#endif
 }
 
 /*

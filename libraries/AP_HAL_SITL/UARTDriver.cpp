@@ -28,6 +28,9 @@
 #include <AP_Math/AP_Math.h>
 
 #include <errno.h>
+#ifdef __EMSCRIPTEN__
+#include "wasm_mavlink_io.h"
+#endif
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -208,6 +211,9 @@ void UARTDriver::_end()
 
 uint32_t UARTDriver::_available(void)
 {
+#ifdef __EMSCRIPTEN__
+    return _readbuffer.available();
+#else
     _check_connection();
 
     if (!_connected) {
@@ -215,15 +221,20 @@ uint32_t UARTDriver::_available(void)
     }
 
     return _readbuffer.available();
+#endif
 }
 
 uint32_t UARTDriver::txspace(void)
 {
+#ifdef __EMSCRIPTEN__
+    return _writebuffer.space();
+#else
     _check_connection();
     if (!_connected) {
         return 0;
     }
     return _writebuffer.space();
+#endif
 }
 
 enum AP_HAL::UARTDriver::flow_control UARTDriver::get_flow_control(void)
@@ -335,6 +346,13 @@ void UARTDriver::_tcp_start_connection(uint16_t port, bool wait_for_connection)
         close(_fd);
     }
 
+#ifdef __EMSCRIPTEN__
+    // TCP listen/accept not supported in WASM - skip server socket setup
+    if (_listen_fd == -1) {
+        fprintf(stderr, "SERIAL%u: TCP listen skipped (WASM build)\n", _portNumber);
+        _listen_fd = -1;
+    }
+#else
     if (_listen_fd == -1) {
         memset(&_listen_sockaddr,0,sizeof(_listen_sockaddr));
 
@@ -387,7 +405,12 @@ void UARTDriver::_tcp_start_connection(uint16_t port, bool wait_for_connection)
                 (unsigned)ntohs(_listen_sockaddr.sin_port));
         fflush(stdout);
     }
+#endif
 
+#ifdef __EMSCRIPTEN__
+    // No TCP accept in WASM -- mark as not connected
+    (void)wait_for_connection;
+#else
     if (wait_for_connection) {
         fprintf(stdout, "Waiting for connection ....\n");
         fflush(stdout);
@@ -402,6 +425,7 @@ void UARTDriver::_tcp_start_connection(uint16_t port, bool wait_for_connection)
         _connected = true;
         fprintf(stdout, "Connection on serial port %u\n", (unsigned)ntohs(_listen_sockaddr.sin_port));
     }
+#endif
 }
 
 
@@ -566,8 +590,12 @@ void UARTDriver::_udp_start_multicast(const char *address, uint16_t port)
     }
     int one = 1;
     if (setsockopt(_mc_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1) {
+#ifdef __EMSCRIPTEN__
+        fprintf(stderr, "setsockopt SO_REUSEADDR not supported (WASM), continuing\n");
+#else
         fprintf(stderr, "setsockopt failed: %s\n", strerror(errno));
         exit(1);
+#endif
     }
 
     // close on exec, to allow reboot
@@ -828,6 +856,19 @@ uint16_t UARTDriver::read_from_async_csv(uint8_t *buffer, uint16_t space)
 void UARTDriver::handle_writing_from_writebuffer_to_device()
 {
     WITH_SEMAPHORE(write_mtx);
+#ifdef __EMSCRIPTEN__
+    // WebAssembly: drain writebuffer into the shared ring buffer for JS to read
+    {
+        uint32_t navail;
+        const uint8_t *readptr = _writebuffer.readptr(navail);
+        if (readptr && navail > 0) {
+            wasm_mavlink_tx_write(_portNumber, readptr, navail);
+            _writebuffer.advance(navail);
+            _tx_stats_bytes += navail;
+        }
+    }
+    return;
+#endif
     if (!_connected) {
         _check_reconnect();
         return;
@@ -890,6 +931,22 @@ void UARTDriver::handle_writing_from_writebuffer_to_device()
 
 void UARTDriver::handle_reading_from_device_to_readbuffer()
 {
+#ifdef __EMSCRIPTEN__
+    // WebAssembly: read from the shared ring buffer that JS writes into
+    {
+        uint32_t space = _readbuffer.space();
+        if (space > 0) {
+            uint8_t tmpbuf[space];
+            size_t nread = wasm_mavlink_rx_read(_portNumber, tmpbuf, space);
+            if (nread > 0) {
+                _readbuffer.write(tmpbuf, nread);
+                _receive_timestamp = AP_HAL::micros64();
+                _rx_stats_bytes += nread;
+            }
+        }
+    }
+    return;
+#endif
     if (!_connected) {
         _check_reconnect();
         return;
