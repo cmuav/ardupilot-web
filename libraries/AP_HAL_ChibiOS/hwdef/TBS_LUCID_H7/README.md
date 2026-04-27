@@ -5,7 +5,7 @@ The TBS LUCID H7 is a flight controller produced by [TBS](https://www.team-black
 ## Features
 
 - MCU - STM32H743 32-bit processor running at 480 MHz
-- IMU - Dual ICM42688
+- IMU - Dual ICM42688 (Dual MPU6000 on some v2 boards)
 - Barometer - DPS310
 - OSD - AT7456E
 - microSD card slot
@@ -95,7 +95,7 @@ The correct battery setting parameters are:
 
 Pads for a second analog battery monitor are provided. To use:
 
-- Set BATT2_MONIOTOR 4
+- BATT2_MONITOR 4
 - BATT2_VOLT_PIN 18
 - BATT2_CURR_PIN 7
 - BATT2_VOLT_MULT 11.0
