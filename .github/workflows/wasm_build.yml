@@ -1,0 +1,64 @@
+name: WASM Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - copter
+          - heli
+          - plane
+          - rover
+          - sub
+          - antennatracker
+          - blimp
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build WASM image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.wasm
+          tags: ardupilot-wasm:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: ccache cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-wasm-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            ccache-wasm-${{ matrix.target }}-
+            ccache-wasm-
+
+      - name: Build ${{ matrix.target }}
+        run: |
+          mkdir -p .ccache
+          docker run --rm \
+            -v "${{ github.workspace }}:/ardupilot" \
+            -v "${{ github.workspace }}/.ccache:/root/.ccache" \
+            ardupilot-wasm:latest ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: build/wasm/bin/
+          if-no-files-found: error
