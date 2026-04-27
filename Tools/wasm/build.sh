@@ -45,6 +45,10 @@ export CFLAGS="$EXTRA"
 export CXXFLAGS="$EXTRA"
 export LDFLAGS="$PTHREAD_STUB -pthread -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s NO_EXIT_RUNTIME=1 -s MODULARIZE=1 -s EXPORT_NAME=$EXPORT_NAME -s ENVIRONMENT=web,worker -s INITIAL_MEMORY=33554432 -s EXPORTED_RUNTIME_METHODS=[callMain,cwrap,ccall,getValue,setValue,stackSave,stackRestore,stackAlloc,HEAPU8,FS] -s PROXY_TO_PTHREAD=1 -s PTHREAD_POOL_SIZE=4"
 
+# /usr/bin/size can't read wasm. Point waf at /bin/true so build_summary
+# gets empty output and parses zero size rows instead of erroring.
+export SIZE=/bin/true
+
 ./waf configure \
     --board sitl \
     --toolchain native \

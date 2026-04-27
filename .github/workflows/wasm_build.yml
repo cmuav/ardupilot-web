@@ -60,5 +60,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: build/wasm/bin/
+          path: build/wasm/sitl/bin/
           if-no-files-found: error
